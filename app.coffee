@@ -1,41 +1,44 @@
-# Dependencies
+
+# Module dependencies.
+
 express = require 'express'
-Resource = require 'express-resource'
+require 'express-namespace'
 
-# Create the application server
-server = express()
+path = require 'path'
+GLOBAL._ = require 'underscore'
 
-# Server configuration
-#
-# `baseDir` is used to cache the base directory for
-# files in other modules, this avoids having to work
-# out where files are in relation to the current one.
-#
-# Each of the config files should export a function
-# which will be used in `server.configure`. `this`
-# in these functions will be `server` which makes
-# for an intuitive way of writing configurations.
-server.set 'baseDir', __dirname
-server.configure require('./config/default')
-server.configure 'development', require('./config/development')
-server.configure 'production', require('./config/production')
+app = module.exports = express()
 
-# Load routes
-#
-# The routes file should export a function which is
-# called here. `this` in the routes function will be
-# `server`.
-require('./routes').call server
+port = ->
+  if (app.settings.env is 'production')
+    8080
+  else
+    3030
+app.configure ->
+  app.set 'port', port()
+  app.set 'views', __dirname + '/views'
+  app.set 'view engine', 'jade'
+  app.use express.favicon()
+  app.use express.logger('dev')
+  app.use express.bodyParser()
+  app.use express.methodOverride()
+  app.use express.cookieParser('IDONTHAVESECRET')
+  app.use express.session()
+  app.use app.router
+  app.use require('stylus').middleware(__dirname + '/public')
+  app.use express.static(path.join(__dirname, 'public'))
 
-# Run the server
-#
-# Rather than specify a port here, we use arbitrary
-# configurations. Try to keep as much of the server
-# as possible configurable through the files in
-# ./server/config.
-server.listen server.port
+app.configure 'development', ->
+  app.use(express.errorHandler());
 
-console.log 'Server running...'
-console.log '  > Listening on port %d in %s mode', server.port, server.settings.env
+# Routes
+require('./apps/terminal/routes')(app)
+require('./apps/notifier/routes')(app)
+require('./apps/phone/routes')(app)
+require('./apps/searchlog/routes')(app)
+require('./apps/payment/routes')(app)
 
-module.exports = server
+app.listen app.get('port'), ->
+  console.log "Express server listening on port " + app.get('port')
+
+require('./mysql_configure')
